@@ -1,3 +1,5 @@
+
+
 export interface DailyMetric {
   date: string;
   steps: number;
@@ -22,6 +24,16 @@ export interface AnalysisResponse {
   preventativePatches: string[]; // Proactive measures
 }
 
+export interface SystemProfile {
+  archetype: string; // e.g. "Endurance Runner" or "Overclocked CPU"
+  attributes: {
+    subject: string;
+    A: number; // fullMark
+    fullMark: number;
+  }[];
+  bio: string; // The text summary
+}
+
 export enum TabView {
   DASHBOARD = 'DASHBOARD',
   LOGS = 'LOGS',
@@ -43,4 +55,12 @@ export interface ReportResponse {
   trends: TrendItem[];
   comparisonSummary: string; // Comparison vs previous period
   optimizationTips: string[];
+}
+
+export interface RecoveryZoneResult {
+  advice: string;
+  locations: {
+    title: string;
+    uri: string;
+  }[];
 }

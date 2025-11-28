@@ -1,5 +1,7 @@
+
+
 import { GoogleGenAI, Schema, Type } from "@google/genai";
-import { DailyMetric, AnalysisResponse, ReportResponse, ReportTimeframe } from "../types";
+import { DailyMetric, AnalysisResponse, ReportResponse, ReportTimeframe, SystemProfile, RecoveryZoneResult } from "../types";
 
 // Initialize Gemini
 // CRITICAL: process.env.API_KEY is handled by the environment
@@ -142,6 +144,111 @@ export const generateProgressReport = async (data: DailyMetric[], timeframe: Rep
   }
 };
 
+export const analyzeSystemProfile = async (data: DailyMetric[]): Promise<SystemProfile> => {
+  // Analyze full history
+  const prompt = `
+    Analyze the following 30 days of biometric data to create a "System Identity Profile" (Resume).
+    
+    DATA:
+    ${JSON.stringify(data.slice(-30))}
+
+    TASK:
+    1. Define a creative "Bio-Archetype" (e.g., "Overclocked Engine", "Hibernating Bear", "Balanced Monk").
+    2. Write a short, professional "Bio/Resume" summary (2-3 sentences) explaining how this system operates.
+    3. Score the system (0-100) on these 5 attributes based on the data:
+       - Stamina (Based on Steps/Activity volume)
+       - Stability (Based on HRV consistency and Mood stability)
+       - Recovery (Based on Sleep scores)
+       - Efficiency (Based on Resting Heart Rate - lower is better)
+       - Resilience (Based on Stress levels and Mood)
+
+    Return JSON matching this schema:
+    {
+      "archetype": "string",
+      "bio": "string",
+      "attributes": [
+        { "subject": "Stamina", "A": number (0-100), "fullMark": 100 },
+        { "subject": "Stability", "A": number (0-100), "fullMark": 100 },
+        { "subject": "Recovery", "A": number (0-100), "fullMark": 100 },
+        { "subject": "Efficiency", "A": number (0-100), "fullMark": 100 },
+        { "subject": "Resilience", "A": number (0-100), "fullMark": 100 }
+      ]
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("No response from AI");
+    return JSON.parse(text) as SystemProfile;
+
+  } catch (error) {
+    console.error("Profile Analysis Failed:", error);
+    // Fallback data
+    return {
+      archetype: "System Offline",
+      bio: "Unable to generate profile.",
+      attributes: [
+        { subject: "Stamina", A: 0, fullMark: 100 },
+        { subject: "Stability", A: 0, fullMark: 100 },
+        { subject: "Recovery", A: 0, fullMark: 100 },
+        { subject: "Efficiency", A: 0, fullMark: 100 },
+        { subject: "Resilience", A: 0, fullMark: 100 }
+      ]
+    };
+  }
+};
+
+export const findRecoveryZones = async (lat: number, lng: number, context: string): Promise<RecoveryZoneResult | null> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Find ${context} near me. Provide a short helpful advice string about these places for my recovery.`,
+      config: {
+        tools: [{googleMaps: {}}],
+        toolConfig: {
+          retrievalConfig: {
+            latLng: {
+              latitude: lat,
+              longitude: lng
+            }
+          }
+        }
+      },
+    });
+
+    const advice = response.text || "No advice available.";
+    
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const locations = chunks.reduce((acc: {title: string, uri: string}[], chunk: any) => {
+        if (chunk.maps) {
+           // Google Maps grounding chunk
+           acc.push({ title: chunk.maps.title || "Unknown Location", uri: chunk.maps.uri });
+        } else if (chunk.web) {
+           // Fallback or Search grounding chunk
+           acc.push({ title: chunk.web.title, uri: chunk.web.uri });
+        }
+        return acc;
+    }, []);
+    
+    return {
+        advice,
+        locations
+    };
+
+  } catch (error) {
+      console.error("Maps Grounding Failed:", error);
+      return null;
+  }
+};
+
 /**
  * Text-to-Speech functionality using Gemini 2.5 Flash TTS
  */
@@ -205,7 +312,7 @@ async function decodePcmAudioData(
 
 let activeAudioSource: AudioBufferSourceNode | null = null;
 
-export const playPCMAudio = async (base64String: string) => {
+export const playPCMAudio = async (base64String: string, onEnded?: () => void) => {
   // Stop existing audio if playing
   if (activeAudioSource) {
     try {
@@ -228,6 +335,7 @@ export const playPCMAudio = async (base64String: string) => {
   source.onended = () => {
     activeAudioSource = null;
     audioContext.close();
+    if (onEnded) onEnded();
   };
   
   return source;

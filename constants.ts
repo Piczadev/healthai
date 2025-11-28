@@ -8,27 +8,28 @@ const generateMockData = (): DailyMetric[] => {
   const data: DailyMetric[] = [];
   const today = new Date();
   
-  // Create 30 days of data
-  for (let i = 29; i >= 0; i--) {
+  // Create 60 days of data to allow for Month-over-Month comparison in reports
+  for (let i = 59; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     
     // Simulating the "Crash" scenario described in the PDF
-    // Days 0-10: Pre-crisis (Normal-ish)
-    // Days 11-25: Crisis (Flight mode - High steps, dropping HRV)
-    // Days 26-30: Current state (Critical)
+    // Timeline relative to "Now" (Day 0):
+    // Days 25-59: Baseline (Normal/Healthy)
+    // Days 10-24: Flight Response (High steps, dropping HRV)
+    // Days 0-9: Crash/Current (Critical Low HRV, High RHR, Burnout)
     
     let steps, rhr, hrv, sleep, moodScore, tags;
 
-    if (i > 20) {
-      // Normal baseline
+    if (i > 25) {
+      // Normal baseline (Older history)
       steps = 8000 + Math.random() * 4000;
       rhr = 55 + Math.random() * 5;
       hrv = 65 + Math.random() * 15;
       sleep = 85 + Math.random() * 10;
       moodScore = 7 + Math.floor(Math.random() * 2);
       tags = ["Stable", "Balanced"];
-    } else if (i > 5) {
+    } else if (i > 10) {
       // The "Flight Response" / 40k steps phase
       steps = 25000 + Math.random() * 15000; // Peaks of 40k
       rhr = 68 + Math.random() * 8; // Elevating
@@ -37,7 +38,7 @@ const generateMockData = (): DailyMetric[] => {
       moodScore = 4 + Math.floor(Math.random() * 3);
       tags = ["Hyper-focused", "Agitated", "Restless"];
     } else {
-      // The "Crash" / Current state
+      // The "Crash" / Current state (Last 10 days)
       steps = 15000 + Math.random() * 5000; // Trying to slow down but still high
       rhr = 76 + Math.random() * 4; // High RHR mentioned in text
       hrv = 29 + Math.random() * 5; // The critical 29ms mentioned
@@ -52,7 +53,7 @@ const generateMockData = (): DailyMetric[] => {
       restingHeartRate: Math.floor(rhr),
       hrv: Math.floor(hrv),
       sleepScore: Math.floor(sleep),
-      stressLevel: i < 5 ? 9 : (i < 20 ? 8 : 4),
+      stressLevel: i < 10 ? 9 : (i > 25 ? 4 : 8),
       caloriesBurned: Math.floor(steps * 0.04 + 1800),
       moodScore: moodScore,
       emotionalTags: tags
