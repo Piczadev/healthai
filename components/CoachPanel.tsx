@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DailyMetric, AnalysisResponse } from '../types';
-import { analyzeBioSystem } from '../services/geminiService';
-import { Terminal, Cpu, AlertTriangle, CheckCircle, RefreshCw, FileText, Zap, Shield, ArrowRight } from 'lucide-react';
+import { analyzeBioSystem, generateVoiceBriefing, playPCMAudio } from '../services/geminiService';
+import { Terminal, Cpu, AlertTriangle, CheckCircle, RefreshCw, FileText, Zap, Shield, ArrowRight, Volume2, StopCircle } from 'lucide-react';
 
 interface CoachPanelProps {
   data: DailyMetric[];
@@ -11,6 +11,8 @@ interface CoachPanelProps {
 export const CoachPanel: React.FC<CoachPanelProps> = ({ data, onOpenReport }) => {
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const runDiagnostics = async () => {
     setLoading(true);
@@ -27,6 +29,42 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ data, onOpenReport }) =>
   useEffect(() => {
     runDiagnostics();
   }, []);
+
+  const handleVoiceBriefing = async () => {
+    if (!analysis) return;
+    
+    if (isPlaying) {
+      // Logic to stop typically handled by global service or reloading component, 
+      // but here we just reset state as playPCMAudio handles stopping previous track.
+      setIsPlaying(false);
+      return; 
+    }
+
+    setAudioLoading(true);
+    const textToSpeak = `
+      System Status: ${analysis.systemStatus}.
+      Burnout Risk is at ${analysis.burnoutRisk} percent.
+      Kernel Analysis: ${analysis.summary}.
+      Predictive Heuristics: ${analysis.predictiveAnalysis}.
+      Recommended Patches: ${analysis.preventativePatches.join('. ')}.
+    `;
+    
+    try {
+      const base64Audio = await generateVoiceBriefing(textToSpeak);
+      if (base64Audio) {
+        setIsPlaying(true);
+        await playPCMAudio(base64Audio);
+        // Reset playing state after approximate duration or rely on user to stop?
+        // Simple toggle for now.
+        setTimeout(() => setIsPlaying(false), 20000); // Auto-reset for UI after 20s
+      }
+    } catch (e) {
+      console.error(e);
+      setIsPlaying(false);
+    } finally {
+      setAudioLoading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -52,13 +90,26 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ data, onOpenReport }) =>
           <Terminal size={18} />
           Diagnostic Assistant
         </h2>
-        <button 
-          onClick={runDiagnostics} 
-          disabled={loading}
-          className="p-2 hover:bg-white/5 rounded-full transition-colors disabled:opacity-50 text-mat-on-surface-variant"
-        >
-          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex gap-2">
+          {analysis && (
+            <button
+              onClick={handleVoiceBriefing}
+              disabled={audioLoading}
+              className={`p-2 rounded-full transition-colors text-mat-on-surface-variant hover:bg-white/5 ${audioLoading ? 'animate-pulse' : ''} ${isPlaying ? 'text-mat-primary bg-mat-primary/10' : ''}`}
+              title="Read Briefing"
+            >
+               {isPlaying ? <StopCircle size={18} /> : <Volume2 size={18} />}
+            </button>
+          )}
+          <button 
+            onClick={runDiagnostics} 
+            disabled={loading}
+            className="p-2 hover:bg-white/5 rounded-full transition-colors disabled:opacity-50 text-mat-on-surface-variant"
+            title="Rerun Diagnostics"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-8">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Activity, TrendingUp, TrendingDown, Minus, Download, FileText, CheckCircle2 } from 'lucide-react';
+import { X, Calendar, Activity, TrendingUp, TrendingDown, Minus, Download, FileText, CheckCircle2, Volume2, StopCircle } from 'lucide-react';
 import { DailyMetric, ReportResponse, ReportTimeframe } from '../types';
-import { generateProgressReport } from '../services/geminiService';
+import { generateProgressReport, generateVoiceBriefing, playPCMAudio } from '../services/geminiService';
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -13,10 +13,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, data 
   const [timeframe, setTimeframe] = useState<ReportTimeframe>('WEEKLY');
   const [report, setReport] = useState<ReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       loadReport(timeframe);
+    } else {
+      setIsPlaying(false); // Reset audio state when closed
     }
   }, [isOpen, timeframe]);
 
@@ -29,6 +33,37 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, data 
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReadAudit = async () => {
+    if (!report) return;
+
+    if (isPlaying) {
+      setIsPlaying(false);
+      return;
+    }
+
+    setAudioLoading(true);
+    const textToSpeak = `
+      Performance Audit for ${report.periodLabel}.
+      Overall Grade: ${report.overallGrade}.
+      Overview: ${report.comparisonSummary}.
+      Actionable Items: ${report.optimizationTips.join('. ')}.
+    `;
+
+    try {
+      const base64Audio = await generateVoiceBriefing(textToSpeak);
+      if (base64Audio) {
+        setIsPlaying(true);
+        await playPCMAudio(base64Audio);
+        setTimeout(() => setIsPlaying(false), 20000);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsPlaying(false);
+    } finally {
+      setAudioLoading(false);
     }
   };
 
@@ -48,9 +83,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, data 
         
         {/* Header */}
         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-mat-surface">
-          <div>
-            <h2 className="text-xl font-medium text-mat-on-surface">Performance Audit</h2>
-            <p className="text-xs text-mat-on-surface-variant mt-1">Generated via Gemini Core</p>
+          <div className="flex items-center gap-4">
+             <div>
+               <h2 className="text-xl font-medium text-mat-on-surface">Performance Audit</h2>
+               <p className="text-xs text-mat-on-surface-variant mt-1">Generated via Gemini Core</p>
+             </div>
+             {report && (
+               <button
+                 onClick={handleReadAudit}
+                 disabled={audioLoading}
+                 className={`p-2 rounded-full transition-colors text-mat-on-surface-variant hover:bg-white/5 ${audioLoading ? 'animate-pulse' : ''} ${isPlaying ? 'text-mat-primary bg-mat-primary/10' : ''}`}
+                 title="Read Audit Report"
+               >
+                 {isPlaying ? <StopCircle size={20} /> : <Volume2 size={20} />}
+               </button>
+             )}
           </div>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-mat-on-surface-variant transition-colors">
             <X size={24} />
