@@ -1,0 +1,5 @@
+{
+  "name": "BioSystem Debugger",
+  "description": "An advanced biometrics dashboard that treats human physiology like a software system. It visualizes smartwatch data to detect 'system anomalies' (burnout, flight responses) and uses Gemini AI to provide debugging protocols.",
+  "requestFramePermissions": []
+}
