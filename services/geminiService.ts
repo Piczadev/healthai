@@ -2,10 +2,12 @@
 
 import { GoogleGenAI, Schema, Type } from "@google/genai";
 import { DailyMetric, AnalysisResponse, ReportResponse, ReportTimeframe, SystemProfile, RecoveryZoneResult } from "../types";
+import { getAnalysisPrompt, getProgressReportPrompt, getSystemProfilePrompt, getRecoveryZonesPrompt } from "./prompts";
 
 // Initialize Gemini
 // CRITICAL: process.env.API_KEY is handled by the environment
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.API_KEY;
+const ai = new GoogleGenAI({ apiKey });
 
 export const analyzeBioSystem = async (data: DailyMetric[]): Promise<AnalysisResponse> => {
   // We only send the last 7 days to keep context manageable, plus a summary of the 30 days
@@ -13,39 +15,7 @@ export const analyzeBioSystem = async (data: DailyMetric[]): Promise<AnalysisRes
   const avgSteps = Math.floor(data.reduce((acc, curr) => acc + curr.steps, 0) / data.length);
   const minHRV = Math.min(...data.map(d => d.hrv));
 
-  const prompt = `
-    You are a Senior Bio-Systems Engineer and this is a "System Log" of a human body.
-    
-    SYSTEM CONTEXT:
-    - User is a high-performance individual (likely Dev/Researcher).
-    - Current 30-day Avg Load (Steps): ${avgSteps} / day.
-    - Critical Low HRV detected: ${minHRV}ms.
-    
-    RECENT LOGS (Last 7 days):
-    ${JSON.stringify(recentData)}
-
-    TASK:
-    Analyze this data including the new "Emotional Telemetry" (Mood Score & Tags).
-    Perform a HEURISTIC PREDICTION based on the trajectory.
-    
-    Identify:
-    1. The core system anomaly.
-    2. A technical summary of the crash.
-    3. Calculate "Burnout Risk" (0-100%) based on the gap between Load (Steps) and Recovery (HRV/Sleep).
-    4. Provide a "Predictive Analysis": What happens to the system in 7 days if no changes are made?
-    5. Provide 2 specific "Preventative Patches" (Small, high-impact changes to avoid the predicted crash).
-
-    Return the response in strictly valid JSON format matching this schema:
-    {
-      "summary": "string",
-      "anomalyDetected": boolean,
-      "actionableSteps": ["string", "string", "string"],
-      "systemStatus": "OPTIMAL" | "WARNING" | "CRITICAL" | "REBOOT_REQUIRED",
-      "burnoutRisk": number,
-      "predictiveAnalysis": "string (short prediction of future state)",
-      "preventativePatches": ["string", "string"]
-    }
-  `;
+  const prompt = getAnalysisPrompt(avgSteps, minHRV, recentData);
 
   try {
     const response = await ai.models.generateContent({
@@ -58,7 +28,7 @@ export const analyzeBioSystem = async (data: DailyMetric[]): Promise<AnalysisRes
 
     const text = response.text;
     if (!text) throw new Error("No response from AI");
-    
+
     return JSON.parse(text) as AnalysisResponse;
 
   } catch (error) {
@@ -82,42 +52,7 @@ export const generateProgressReport = async (data: DailyMetric[], timeframe: Rep
   const currentPeriodData = data.slice(-days);
   const previousPeriodData = data.slice(-(days * 2), -days);
 
-  const prompt = `
-    You are generating a specialized "System Audit Report" (Bio-OS) for the user.
-    
-    TIMEFRAME: ${timeframe} (Last ${days} days).
-    
-    CURRENT PERIOD DATA:
-    ${JSON.stringify(currentPeriodData)}
-    
-    PREVIOUS PERIOD DATA (For comparison):
-    ${JSON.stringify(previousPeriodData)}
-
-    TASK:
-    Generate a progress report.
-    Focus on:
-    1. Exercise Trends.
-    2. Vital Signs.
-    3. Emotional Telemetry (Are mood scores stabilizing?).
-    
-    Maintain the Cyberpunk/Developer persona (refer to body as Hardware/Software).
-
-    Return JSON matching this schema:
-    {
-      "periodLabel": "string (e.g., 'Oct 12 - Oct 19')",
-      "overallGrade": "A" | "B" | "C" | "D" | "F",
-      "trends": [
-        {
-          "metric": "string (e.g. 'Metabolic Load' or 'HRV Stability')",
-          "direction": "improving" | "declining" | "stable",
-          "changePercentage": "string (e.g. '+12%')",
-          "description": "string (short technical explanation)"
-        }
-      ],
-      "comparisonSummary": "string (A paragraph comparing this period to the last one)",
-      "optimizationTips": ["string", "string", "string"]
-    }
-  `;
+  const prompt = getProgressReportPrompt(timeframe, days, currentPeriodData, previousPeriodData);
 
   try {
     const response = await ai.models.generateContent({
@@ -146,35 +81,7 @@ export const generateProgressReport = async (data: DailyMetric[], timeframe: Rep
 
 export const analyzeSystemProfile = async (data: DailyMetric[]): Promise<SystemProfile> => {
   // Analyze full history
-  const prompt = `
-    Analyze the following 30 days of biometric data to create a "System Identity Profile" (Resume).
-    
-    DATA:
-    ${JSON.stringify(data.slice(-30))}
-
-    TASK:
-    1. Define a creative "Bio-Archetype" (e.g., "Overclocked Engine", "Hibernating Bear", "Balanced Monk").
-    2. Write a short, professional "Bio/Resume" summary (2-3 sentences) explaining how this system operates.
-    3. Score the system (0-100) on these 5 attributes based on the data:
-       - Stamina (Based on Steps/Activity volume)
-       - Stability (Based on HRV consistency and Mood stability)
-       - Recovery (Based on Sleep scores)
-       - Efficiency (Based on Resting Heart Rate - lower is better)
-       - Resilience (Based on Stress levels and Mood)
-
-    Return JSON matching this schema:
-    {
-      "archetype": "string",
-      "bio": "string",
-      "attributes": [
-        { "subject": "Stamina", "A": number (0-100), "fullMark": 100 },
-        { "subject": "Stability", "A": number (0-100), "fullMark": 100 },
-        { "subject": "Recovery", "A": number (0-100), "fullMark": 100 },
-        { "subject": "Efficiency", "A": number (0-100), "fullMark": 100 },
-        { "subject": "Resilience", "A": number (0-100), "fullMark": 100 }
-      ]
-    }
-  `;
+  const prompt = getSystemProfilePrompt(data.slice(-30));
 
   try {
     const response = await ai.models.generateContent({
@@ -210,9 +117,9 @@ export const findRecoveryZones = async (lat: number, lng: number, context: strin
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Find ${context} near me. Provide a short helpful advice string about these places for my recovery.`,
+      contents: getRecoveryZonesPrompt(context),
       config: {
-        tools: [{googleMaps: {}}],
+        tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
             latLng: {
@@ -225,27 +132,27 @@ export const findRecoveryZones = async (lat: number, lng: number, context: strin
     });
 
     const advice = response.text || "No advice available.";
-    
+
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const locations = chunks.reduce((acc: {title: string, uri: string}[], chunk: any) => {
-        if (chunk.maps) {
-           // Google Maps grounding chunk
-           acc.push({ title: chunk.maps.title || "Unknown Location", uri: chunk.maps.uri });
-        } else if (chunk.web) {
-           // Fallback or Search grounding chunk
-           acc.push({ title: chunk.web.title, uri: chunk.web.uri });
-        }
-        return acc;
+    const locations = chunks.reduce((acc: { title: string, uri: string }[], chunk: any) => {
+      if (chunk.maps) {
+        // Google Maps grounding chunk
+        acc.push({ title: chunk.maps.title || "Unknown Location", uri: chunk.maps.uri });
+      } else if (chunk.web) {
+        // Fallback or Search grounding chunk
+        acc.push({ title: chunk.web.title, uri: chunk.web.uri });
+      }
+      return acc;
     }, []);
-    
+
     return {
-        advice,
-        locations
+      advice,
+      locations
     };
 
   } catch (error) {
-      console.error("Maps Grounding Failed:", error);
-      return null;
+    console.error("Maps Grounding Failed:", error);
+    return null;
   }
 };
 
@@ -260,13 +167,13 @@ export const generateVoiceBriefing = async (text: string): Promise<string | null
       config: {
         responseModalities: ['AUDIO'],
         speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
         },
       },
     });
-    
+
     // The response contains raw PCM data in base64
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     return base64Audio || null;
@@ -317,26 +224,26 @@ export const playPCMAudio = async (base64String: string, onEnded?: () => void) =
   if (activeAudioSource) {
     try {
       activeAudioSource.stop();
-    } catch(e) {}
+    } catch (e) { }
     activeAudioSource = null;
   }
 
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
   const rawBytes = decodeBase64(base64String);
   const audioBuffer = await decodePcmAudioData(rawBytes, audioContext);
-  
+
   const source = audioContext.createBufferSource();
   source.buffer = audioBuffer;
   source.connect(audioContext.destination);
   source.start(0);
-  
+
   activeAudioSource = source;
-  
+
   source.onended = () => {
     activeAudioSource = null;
     audioContext.close();
     if (onEnded) onEnded();
   };
-  
+
   return source;
 };

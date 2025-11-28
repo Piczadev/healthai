@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #050505;
+  color: #E0E0E0;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  overflow: hidden; /* App handles scroll */
+}
+
+/* Liquid Mesh Gradient Background */
+.liquid-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  background: 
+    radial-gradient(circle at 15% 50%, rgba(124, 77, 255, 0.15), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.15), transparent 25%),
+    radial-gradient(circle at 50% 80%, rgba(255, 64, 129, 0.1), transparent 40%);
+  background-color: #09090b; /* Deep base */
+  filter: blur(40px);
+  animation: pulse-bg 10s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-bg {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.05); }
+}
+
+/* Minimal Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
