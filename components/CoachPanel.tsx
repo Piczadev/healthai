@@ -85,15 +85,25 @@ export const CoachPanel: React.FC<CoachPanelProps> = ({ data, onOpenReport, onLo
         navigator.geolocation.getCurrentPosition(async (position) => {
             const { latitude, longitude } = position.coords;
             try {
-                // Determine context from current biometric state
+                // Determine context from current biometric state with granular logic
                 const currentData = data[data.length - 1];
-                let queryContext = "quiet places to relax"; // default
-                if (currentData.hrv < 30 || currentData.stressLevel > 7) {
-                    queryContext = "quiet parks or nature reserves for stress relief";
-                } else if (currentData.steps < 3000) {
-                    queryContext = "scenic walking trails or gyms";
-                } else {
-                    queryContext = "healthy food restaurants";
+                let queryContext = "quiet places to relax"; // fallback
+
+                // 1. Critical System Failure (Nervous System Overload)
+                if (currentData.hrv < 35 || currentData.stressLevel >= 8 || currentData.moodScore <= 3) {
+                    queryContext = "quiet nature reserves, meditation gardens, or sensory deprivation tanks for deep nervous system recovery";
+                } 
+                // 2. Physical Burnout (Muscular/Structural Load)
+                else if (currentData.steps > 20000 || currentData.caloriesBurned > 3500) {
+                    queryContext = "spas with saunas, cryotherapy centers, or restorative yoga studios for physical recovery";
+                }
+                // 3. Stagnation / Depressive State (Need Activation)
+                else if (currentData.steps < 4000 && currentData.moodScore < 6) {
+                    queryContext = "scenic walking trails, botanical gardens, or sunny public parks for light activation";
+                }
+                // 4. Optimal Maintenance (Refueling)
+                else if (currentData.hrv > 50 && currentData.sleepScore > 75) {
+                    queryContext = "organic health food cafes, matcha bars, or high-quality wellness centers";
                 }
 
                 const result = await findRecoveryZones(latitude, longitude, queryContext);
